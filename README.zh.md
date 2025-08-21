@@ -1,45 +1,45 @@
-# SQL Alignment & Preview Tool
+# SQL 对齐与预览工具
 
-[简体中文](./README.zh.md) | **English**
+[English](./README.md) | **简体中文**
 
-Welcome to **SQL Alignment & Preview Tool**!
-This application is designed to help you **quickly format and organize SQL code**, especially `CREATE TABLE` statements.
-With a clean interface and a powerful alignment engine, you can easily transform messy SQL into **clear, readable, and professional-looking code**, improving both development and maintenance efficiency.
-
----
-
-### Features
-
-#### ✨ **Single SQL Alignment**
-
-* **Live Preview**: Paste your SQL in the left editor, and the right preview panel will **instantly show the formatted result**.
-* **Side-by-Side Comparison**: Original vs. formatted SQL displayed side-by-side for easy review.
-* **Code Statistics**: Automatically count total lines, valid lines, comment lines, and field numbers for quick insights.
-* **Export Options**: Download formatted SQL or a full report with one click.
-
-#### 📂 **Batch Processing**
-
-* **File Upload**: Upload multiple `.sql` or `.txt` files at once.
-* **Progress Indicator**: Track real-time processing progress with a progress bar and status updates.
-* **Custom File Prefix**: Add a prefix to output filenames for easier batch management.
-* **Processing Report**: Get a summary report including processed results and potential issues.
-* **ZIP Download**: All formatted files are bundled into a ZIP for quick download.
+欢迎使用 **SQL 对齐与预览工具**！  
+这个应用程序旨在帮助您 **快速格式化和整理 SQL 代码**，尤其是 `CREATE TABLE` 语句。  
+通过简洁的界面和强大的对齐引擎，您可以轻松地将杂乱的 SQL 转换为 **清晰、易读、专业的格式**，提升开发和维护效率。  
 
 ---
 
-### Customization
+### 功能特色
 
-In the left sidebar, you can tweak alignment behavior:
+#### ✨ **单条 SQL 对齐**
 
-* **Comment Wrap Width**: Adjust the maximum line width for comment wrapping.
-* **Line Numbers**: Toggle line numbers on or off in previews.
-* **Case Sensitivity**: Choose whether keywords are case-sensitive during alignment.
+* **实时预览**：在左侧编辑器中粘贴 SQL，右侧预览区域会 **即时显示对齐后的结果**。  
+* **左右对比**：原始 SQL 与格式化 SQL **并排展示**，对比更直观。  
+* **代码统计**：自动统计总行数、有效行数、注释行数和字段数量，便于快速分析。  
+* **导出选项**：一键下载格式化后的 SQL 或完整报告。  
+
+#### 📂 **批量处理**
+
+* **文件上传**：支持批量上传 `.sql` 或 `.txt` 文件。  
+* **进度提示**：实时显示处理进度条和状态更新。  
+* **文件名前缀**：可自定义下载文件的前缀，方便批量管理。  
+* **处理报告**：自动生成报告，包含处理结果和潜在问题。  
+* **ZIP 打包下载**：所有格式化文件会打包成 ZIP，便于统一下载。  
 
 ---
 
-### Example
+### 个性化设置
 
-* **Original SQL**
+在左侧的设置栏中，您可以调整对齐规则：
+
+* **注释换行宽度**：调整注释文字自动换行的最大长度。  
+* **显示行号**：可选择在预览中显示或隐藏行号。  
+* **大小写敏感**：设置在对齐时是否区分关键字大小写。  
+
+---
+
+### 示例
+
+* **原始 SQL**
 
 ```postgresql
 -- ----------------------------
@@ -85,9 +85,9 @@ COMMENT ON COLUMN "public"."demo"."update_time" IS '更新时间';
 COMMENT ON COLUMN "public"."demo"."deleted" IS '逻辑删除';
 COMMENT ON COLUMN "public"."demo"."remark" IS '描述';
 COMMENT ON TABLE "public"."demo" IS '示例表';
-```
+````
 
-* **Formatted SQL**
+* **格式化 SQL**
 
 ```postgresql
 -- ----------------------------
