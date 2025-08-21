@@ -1,8 +1,8 @@
 [project]
 name = "sql-beautify"
-version = "1.0.0"
+version = "0.1.0"
 description = "A Streamlit application for SQL alignment and beautification."
-requires-python = ">=3.9" # Recommended for modern Streamlit apps
+requires-python = ">=3.9" # Updated to a stable version compatible with streamlit
 dependencies = [
     "streamlit>=1.30.0",
 ]
