@@ -12,6 +12,11 @@ where = ["."]
 include = ["*"]
 exclude = ["venv", ".venv"]
 
+# Added to fix "No file/folder found for package" error for single-script projects.
+# This tells Poetry to not try to install the project itself as a package.
+[tool.poetry]
+package-mode = false
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
