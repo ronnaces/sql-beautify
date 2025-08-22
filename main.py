@@ -1,23 +1,21 @@
-import streamlit as st
-import re
 import io
-import zipfile
+import re
 import textwrap
-from typing import Match, Dict, List, Tuple
+import zipfile
+from typing import Match, Dict, Tuple
 
-# ---------- 页面配置 ----------
+import streamlit as st
+
 st.set_page_config(
-    page_title="SQL 对齐对比工具",
+    page_title="SQL Alignment Tool",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 使用自定义 CSS 注入来优化视觉效果
 st.markdown("""
 <style>
-    /* 全局样式 */
     :root {
-        --primary-color: #4CAF50; /* 绿色系主色 */
+        --primary-color: #4CAF50;
         --background-color: #1a1a1a;
         --secondary-background-color: #2e2e2e;
         --text-color: #f0f0f0;
@@ -31,7 +29,6 @@ st.markdown("""
     .stApp {
         background-color: var(--background-color);
     }
-    /* Streamlit 核心组件样式 */
     .st-emotion-cache-1cypcdb {
         color: var(--text-color);
         background-color: var(--secondary-background-color);
@@ -84,7 +81,6 @@ st.markdown("""
 
 st.title("🔧 SQL Alignment & Java DO to SQL Tool")
 
-# ---------- 侧边栏配置 ----------
 with st.sidebar:
     st.header("⚙️ Configuration")
     wrap_comment_width = st.slider("Comment wrap width", 30, 120, 60, 5)
@@ -93,15 +89,14 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### Java DO to SQL Settings")
-    schema_name = st.text_input("Schema name", value="public", help="Database schema name")
-    add_drop_table = st.checkbox("Add DROP TABLE", value=True, help="Include DROP TABLE IF EXISTS")
-    add_base_do_fields = st.checkbox("Add BaseDO fields", value=True,
-                                     help="Include tenant_id, creator, create_time, etc.")
-    add_sequence = st.checkbox("Add sequence", value=True, help="Generate sequence for primary key")
-    use_camel_to_snake = st.checkbox("CamelCase to snake_case", value=True, help="Convert field names")
+    schema_name = st.text_input("Schema name", value="public")
+    add_drop_table = st.checkbox("Add DROP TABLE", value=True)
+    add_base_do_fields = st.checkbox("Add BaseDO fields", value=True)
+    add_sequence = st.checkbox("Add sequence", value=True)
+    use_camel_to_snake = st.checkbox("CamelCase to snake_case", value=True)
 
     st.markdown("#### Database Type")
-    db_type = st.selectbox("Database", ["PostgreSQL", "MySQL", "Oracle"], help="Target database type")
+    db_type = st.selectbox("Database", ["PostgreSQL", "MySQL", "Oracle"])
 
     st.markdown("---")
     st.markdown("""
@@ -116,18 +111,12 @@ with st.sidebar:
 
 
 def align_create_table(sql_text: str, wrap_comment_width: int, case_sensitive: bool) -> str:
-    """
-    Main alignment function that orchestrates the alignment of CREATE TABLE and COMMENT statements.
-    """
     flags = re.S | re.X | (0 if case_sensitive else re.I)
 
-    # 1. Align all COMMENT statements (ON TABLE and ON COLUMN) together.
     sql_text = _align_all_comments(sql_text, wrap_comment_width, flags)
 
-    # 2. Align the column definitions within the CREATE TABLE statement.
     sql_text = _align_create_table_columns(sql_text, flags)
 
-    # 3. Final cleanup: remove extra newlines between CREATE TABLE and COMMENT statements.
     sql_text = re.sub(
         r'(\);\s*)\n+(\s*COMMENT)',
         r'\1\n\2',
@@ -139,27 +128,21 @@ def align_create_table(sql_text: str, wrap_comment_width: int, case_sensitive: b
 
 
 def _align_create_table_columns(sql_text: str, flags: int) -> str:
-    """
-    Aligns the column definitions within a CREATE TABLE statement.
-    """
     create_pat = re.compile(r"""
         (CREATE\s+TABLE\s+(?:
-            "?\w+"?\.)?       # Optional schema name
-            "?\w+"?            # Table name
-            \s*\()             # Opening parenthesis
-        (.*?)                  # Capture all column definitions
-        (\s*\)\s*;)            # Closing parenthesis and semicolon
+            "?\w+"?\.)?       
+            "?\w+"?            
+            \s*\()             
+        (.*?)                  
+        (\s*\)\s*;)            
     """, flags=flags)
 
     def align_columns_replacer(match: Match) -> str:
         raw = match.group(2)
-        # Robustly split columns by comma, ignoring commas inside quotes.
         chunks = [seg.strip() for seg in re.split(r',(?=(?:[^"]*"[^"]*")*[^"]*$)', raw) if seg.strip()]
 
-        # Parse each column line into its components.
         parsed_rows = []
         for chunk in chunks:
-            # Handle cases where column name might be a keyword and quoted
             m = re.match(r'("([^"]+)"\s*)(\S+)(.*)', chunk)
             if m:
                 full_col_part, col_name, type_, rest = m.groups()
@@ -167,10 +150,8 @@ def _align_create_table_columns(sql_text: str, flags: int) -> str:
             else:
                 parsed_rows.append({'full_col': '', 'type_': '', 'rest': chunk.strip()})
 
-        # Filter out rows that are not proper column definitions
         valid_rows = [r for r in parsed_rows if r['full_col']]
 
-        # Recalculate max lengths only for valid columns
         max_full_col_len = max((len(r['full_col']) for r in valid_rows), default=0)
         max_type_len = max((len(r['type_']) for r in valid_rows), default=0)
 
@@ -179,7 +160,7 @@ def _align_create_table_columns(sql_text: str, flags: int) -> str:
             if row['full_col']:
                 line = f'    {row["full_col"].ljust(max_full_col_len)} {row["type_"].ljust(max_type_len)} {row["rest"]}'.rstrip()
             else:
-                line = f'    {row["rest"]}'  # For constraints like PRIMARY KEY
+                line = f'    {row["rest"]}'
             aligned.append(line)
 
         return match.group(1) + "\n" + ",\n".join(aligned) + match.group(3)
@@ -188,10 +169,6 @@ def _align_create_table_columns(sql_text: str, flags: int) -> str:
 
 
 def _align_all_comments(sql_text: str, wrap_comment_width: int, flags: int) -> str:
-    """
-    Aligns both COMMENT ON TABLE and COMMENT ON COLUMN statements to a common IS keyword position.
-    """
-    # This regex is more general and robust
     all_comments_pat = re.compile(r"""
         (COMMENT\s+ON\s+(?:TABLE|COLUMN)\s+[^;]+?)\s+IS\s+'([^']*)';
     """, flags=flags | re.DOTALL)
@@ -206,7 +183,6 @@ def _align_all_comments(sql_text: str, wrap_comment_width: int, flags: int) -> s
     def repl_comm(m: Match) -> str:
         part_before_is, body = m.group(1), m.group(2)
 
-        # Ensure the comment body is wrapped, unless it already contains newlines
         if '\n' not in body:
             body = "\n".join(textwrap.wrap(
                 body, width=wrap_comment_width,
@@ -217,42 +193,26 @@ def _align_all_comments(sql_text: str, wrap_comment_width: int, flags: int) -> s
     return all_comments_pat.sub(repl_comm, sql_text)
 
 
-# --- START OF MODIFIED SECTION ---
 def _clean_comment(comment_block: str) -> str:
-    """
-    Helper function to clean a Java comment block by extracting only the first meaningful line.
-    This handles multi-line comments and ignores tags like @link or @author.
-    """
     if not comment_block:
         return ""
 
-    # Remove the starting '/**' or '/*' and ending '*/'
     clean_text = comment_block.strip().lstrip('/*').lstrip('*').rstrip('*/').strip()
 
-    # Split the text into lines and find the first non-empty, non-tag line
     lines = clean_text.split('\n')
     for line in lines:
         line = line.strip().lstrip('*').strip()
-        # Return the first line that is not a tag and is not empty
         if line and not line.startswith('@'):
             return line
     return ""
-# --- END OF MODIFIED SECTION ---
 
 
-# ---------- Java DO 转换功能 ----------
 def camel_to_snake(name: str) -> str:
-    """将CamelCase转换为snake_case"""
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
 def java_type_to_sql(java_type: str, field_name: str = "", db_type: str = "PostgreSQL") -> Tuple[str, str, str]:
-    """
-    将Java类型转换为SQL类型
-    Returns: (sql_type, constraints, default_value)
-    """
-    # 基础类型映射
     if db_type == "PostgreSQL":
         type_mapping = {
             'String': 'varchar(255)',
@@ -275,7 +235,7 @@ def java_type_to_sql(java_type: str, field_name: str = "", db_type: str = "Postg
             'byte[]': 'bytea',
             'Byte[]': 'bytea'
         }
-    else:  # MySQL default
+    else:
         type_mapping = {
             'String': 'VARCHAR(255)',
             'Integer': 'INT',
@@ -298,15 +258,12 @@ def java_type_to_sql(java_type: str, field_name: str = "", db_type: str = "Postg
             'Byte[]': 'BLOB'
         }
 
-    # 处理泛型类型
     java_type = re.sub(r'<.*?>', '', java_type).strip()
 
-    # 获取基础SQL类型
     sql_type = type_mapping.get(java_type, 'varchar(255)' if db_type == "PostgreSQL" else 'VARCHAR(255)')
     constraints = ""
     default_value = ""
 
-    # 特殊字段处理
     field_lower = field_name.lower()
 
     if field_lower in ['id', 'uid']:
@@ -355,7 +312,6 @@ def java_type_to_sql(java_type: str, field_name: str = "", db_type: str = "Postg
 
 
 def parse_java_class(java_code: str) -> Dict:
-    """解析Java类，提取类名、字段、注释和注解"""
     result = {
         'class_name': '',
         'fields': [],
@@ -364,33 +320,27 @@ def parse_java_class(java_code: str) -> Dict:
         'key_sequence': ''
     }
 
-    # 提取类名
     class_match = re.search(r'(?:public\s+)?class\s+(\w+)', java_code)
     if class_match:
         result['class_name'] = class_match.group(1)
 
-    # 提取@TableName注解
     table_name_match = re.search(r'@TableName\s*\(\s*"([^"]+)"\s*\)', java_code)
     if table_name_match:
         result['table_name'] = table_name_match.group(1)
 
-    # 提取@KeySequence注解
     key_sequence_match = re.search(r'@KeySequence\s*\(\s*"([^"]+)"\s*\)', java_code)
     if key_sequence_match:
         result['key_sequence'] = key_sequence_match.group(1)
 
-    # --- 优化: 更精确地提取类注释，并使用新的清理函数 ---
     class_comment_match = re.search(r'/\*\*(.*?)\*/\s*(?:@\w+[^\n]*\n\s*)*public\s+class', java_code, re.DOTALL)
     if class_comment_match:
         raw_comment = class_comment_match.group(1)
-        # 使用新的 _clean_comment 函数来清理注释
         comment = _clean_comment(raw_comment)
         result['class_comment'] = comment
 
-    # 提取字段 - 修正了注释块的正则表达式以支持 / * 和 /** 两种格式
     field_pattern = re.compile(r'''
-        (\s*/{1,2}\*[\s\S]*?\*/\s*)? # 兼容 /* 和 /** 格式的注释块
-        (?:@\w+[^\n]*\n\s*)* # 可选的注解
+        (\s*/{1,2}\*[\s\S]*?\*/\s*)? 
+        (?:@\w+[^\n]*\n\s*)* 
         (?:private|public|protected)?\s*
         (?:static\s+)?(?:final\s+)?
         (\w+(?:<[^>]+>)?)\s+
@@ -404,7 +354,6 @@ def parse_java_class(java_code: str) -> Dict:
         field_type = match.group(2).strip()
         field_name = match.group(3).strip()
 
-        # --- 优化: 使用新的 _clean_comment 函数来处理字段注释 ---
         comment = _clean_comment(comment_block) if comment_block else ''
 
         result['fields'].append({
@@ -419,33 +368,27 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
                    add_drop_table: bool = True, add_base_do_fields: bool = True,
                    add_sequence: bool = True, use_camel_to_snake: bool = True,
                    db_type: str = "PostgreSQL") -> str:
-    """将Java DO类转换为SQL CREATE TABLE语句"""
     parsed = parse_java_class(java_code)
 
     if not parsed['class_name']:
         return "-- Error: Could not parse Java class"
 
-    # 确定表名
     table_name = parsed['table_name'] if parsed['table_name'] else camel_to_snake(parsed['class_name'])
     full_table_name = f'"{schema_name}"."{table_name}"' if db_type == "PostgreSQL" else f"`{table_name}`"
 
     sql_lines = []
 
-    # 添加DROP TABLE语句
     if add_drop_table:
         sql_lines.append("-- ------------------------------")
         sql_lines.append(f"-- Table structure for {table_name}")
         sql_lines.append("-- ------------------------------")
         sql_lines.append(f'DROP TABLE IF EXISTS {full_table_name};')
 
-    # 创建表开始
     sql_lines.append(f'CREATE TABLE {full_table_name} (')
 
-    # 收集所有字段信息用于对齐
     all_fields = []
     all_comments = []
 
-    # 处理实际字段
     for field in parsed['fields']:
         field_name = field['name']
         sql_field_name = camel_to_snake(field_name) if use_camel_to_snake else field_name.lower()
@@ -461,21 +404,19 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
         all_fields.append(field_parts)
 
         if field['comment']:
-            # For 'id' field, use '编号' as comment
             if sql_field_name == 'id':
-                all_comments.append((sql_field_name, '编号'))
+                all_comments.append((sql_field_name, 'ID'))
             else:
                 all_comments.append((sql_field_name, field['comment']))
 
-    # 添加BaseDO字段
     if add_base_do_fields:
         base_fields = [
-            ('tenantId', 'Long', '租户编号'),
-            ('creator', 'String', '创建人'),
-            ('createTime', 'LocalDateTime', '创建时间'),
-            ('updater', 'String', '更新人'),
-            ('updateTime', 'LocalDateTime', '更新时间'),
-            ('deleted', 'Boolean', '逻辑删除')
+            ('tenantId', 'Long', 'Tenant ID'),
+            ('creator', 'String', 'Creator'),
+            ('createTime', 'LocalDateTime', 'Create Time'),
+            ('updater', 'String', 'Updater'),
+            ('updateTime', 'LocalDateTime', 'Update Time'),
+            ('deleted', 'Boolean', 'Logical Delete')
         ]
 
         for field_name, field_type, comment in base_fields:
@@ -492,11 +433,9 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
                 all_fields.append(field_parts)
                 all_comments.append((sql_field_name, comment))
 
-    # 计算对齐宽度
     max_name_len = max(len(f['name']) for f in all_fields) if all_fields else 0
     max_type_len = max(len(f['type']) for f in all_fields) if all_fields else 0
 
-    # 生成对齐的字段定义
     field_definitions = []
     for field_parts in all_fields:
         line = f"    {field_parts['name'].ljust(max_name_len)} {field_parts['type'].ljust(max_type_len)}"
@@ -508,14 +447,10 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
 
         field_definitions.append(line.rstrip())
 
-    # 添加字段定义到SQL
     sql_lines.append(',\n'.join(field_definitions))
     sql_lines.append(');')
 
-    # --- 开始生成注释和序列，确保顺序正确 ---
-
     comment_lines = []
-    # PostgreSQL comments
     if db_type == "PostgreSQL":
         for sql_field_name, comment_text in all_comments:
             comment_line = f'COMMENT ON COLUMN {full_table_name}."{sql_field_name}" IS \'{comment_text}\';'
@@ -524,11 +459,10 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
             table_comment = parsed['class_comment']
             if 'DO' in table_comment:
                 table_comment = table_comment.replace(' DO', '').strip()
-            if not table_comment.endswith('表'):
-                table_comment += '表'
+            if not table_comment.endswith('table'):
+                table_comment += ' table'
             table_comment_line = f'COMMENT ON TABLE {full_table_name} IS \'{table_comment}\';'
             comment_lines.append(table_comment_line)
-    # MySQL/Oracle comments
     else:
         for sql_field_name, comment_text in all_comments:
             comment_line = f'ALTER TABLE `{table_name}` MODIFY COLUMN `{sql_field_name}` {field_parts["type"]} COMMENT \'{comment_text}\';'
@@ -537,8 +471,8 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
             table_comment = parsed['class_comment']
             if 'DO' in table_comment:
                 table_comment = table_comment.replace(' DO', '').strip()
-            if not table_comment.endswith('表'):
-                table_comment += '表'
+            if not table_comment.endswith('table'):
+                table_comment += ' table'
             table_comment_line = f'ALTER TABLE `{table_name}` COMMENT = \'{table_comment}\';'
             comment_lines.append(table_comment_line)
 
@@ -546,7 +480,6 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
     if comment_lines:
         final_sql += '\n' + '\n'.join(comment_lines)
 
-    # 添加序列（确保它在最后）
     if add_sequence and db_type == "PostgreSQL" and parsed['key_sequence']:
         sequence_name = parsed['key_sequence']
         final_sql += f'\n\nDROP SEQUENCE IF EXISTS {sequence_name};'
@@ -555,9 +488,7 @@ def java_do_to_sql(java_code: str, schema_name: str = "public",
     return final_sql
 
 
-# ---------- 统计 ----------
 def get_stats(sql: str) -> dict:
-    """Calculates statistics for the SQL text."""
     lines = sql.splitlines()
     return {
         'total': len(lines),
@@ -569,7 +500,6 @@ def get_stats(sql: str) -> dict:
     }
 
 
-# ---------- 主界面 ----------
 tab1, tab2, tab3 = st.tabs(["📝 Single SQL", "☕ Java DO to SQL", "📂 Batch Files"])
 
 with tab1:
@@ -618,8 +548,7 @@ with tab2:
     java_code = st.text_area(
         "Java DO Class Code",
         height=300,
-        placeholder=java_example,
-        help="支持标准的Java DO类，包括字段注释、类注释等"
+        placeholder=java_example
     )
 
     if java_code.strip():
@@ -635,10 +564,8 @@ with tab2:
             )
 
             if not generated_sql.startswith("-- Error"):
-                # 应用SQL对齐
                 aligned_sql = align_create_table(generated_sql, wrap_comment_width, case_sensitive)
 
-                # 显示转换结果
                 with st.expander("Java to SQL Conversion Result", expanded=True):
                     lcol, rcol = st.columns(2)
                     with lcol:
@@ -651,7 +578,6 @@ with tab2:
                         ) if show_line_numbers else aligned_sql
                         st.code(display_sql, language='sql')
 
-                # 统计信息
                 stats = get_stats(aligned_sql)
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -660,14 +586,13 @@ with tab2:
                         unsafe_allow_html=True)
                 with col2:
                     st.markdown(f'<div class="metric-container"><h5>Fields</h5><h3>{stats["fields"]}</h3></div>',
-                                 unsafe_allow_html=True)
+                                unsafe_allow_html=True)
                 with col3:
                     parsed = parse_java_class(java_code)
                     st.markdown(
                         f'<div class="metric-container"><h5>Java Fields</h5><h3>{len(parsed["fields"])}</h3></div>',
                         unsafe_allow_html=True)
 
-                # 下载按钮
                 parsed_info = parse_java_class(java_code)
                 table_name = parsed_info['table_name'] if parsed_info['table_name'] else camel_to_snake(
                     parsed_info['class_name'])
@@ -683,14 +608,12 @@ with tab3:
     st.subheader("📂 Batch SQL Files")
     files = st.file_uploader("Select .sql/.txt files", type=["sql", "txt"], accept_multiple_files=True)
 
-    # 新增可配置的文件前缀
     download_prefix = st.text_input("Download file prefix", value="aligned_")
 
     if files:
         st.success(f"Selected {len(files)} file(s)")
         if st.button("🚀 Start Batch Processing", type="primary"):
 
-            # 初始化进度条和状态信息
             progress_bar = st.progress(0)
             status_text = st.empty()
 
@@ -728,7 +651,6 @@ with tab3:
             st.subheader("Batch Processing Results")
             st.info(f"Successfully processed {processed_count} out of {len(files)} files.")
 
-            # 下载按钮
             st.download_button("📦 Download ZIP", zip_buf.getvalue(), f"{download_prefix}sql_files.zip",
                                "application/zip")
             st.download_button("📝 Download Summary Report", summary_report, "batch_summary_report.txt", "text/plain")
