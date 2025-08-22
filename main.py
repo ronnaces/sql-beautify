@@ -1,10 +1,9 @@
-import io
-import re
-import textwrap
-import zipfile
-from typing import Match, Dict, Tuple
-
 import streamlit as st
+import re
+import io
+import zipfile
+import textwrap
+from typing import Match, Dict, List, Tuple
 
 st.set_page_config(
     page_title="SQL Alignment Tool",
@@ -586,7 +585,7 @@ with tab2:
                         unsafe_allow_html=True)
                 with col2:
                     st.markdown(f'<div class="metric-container"><h5>Fields</h5><h3>{stats["fields"]}</h3></div>',
-                                unsafe_allow_html=True)
+                                 unsafe_allow_html=True)
                 with col3:
                     parsed = parse_java_class(java_code)
                     st.markdown(
