@@ -217,6 +217,7 @@ def _align_all_comments(sql_text: str, wrap_comment_width: int, flags: int) -> s
     return all_comments_pat.sub(repl_comm, sql_text)
 
 
+# --- START OF MODIFIED SECTION ---
 def _clean_comment(comment_block: str) -> str:
     """
     Helper function to clean a Java comment block by extracting only the first meaningful line.
@@ -236,6 +237,7 @@ def _clean_comment(comment_block: str) -> str:
         if line and not line.startswith('@'):
             return line
     return ""
+# --- END OF MODIFIED SECTION ---
 
 
 # ---------- Java DO 转换功能 ----------
@@ -708,7 +710,7 @@ public class BpmCategoryDO extends BaseDO {
                         unsafe_allow_html=True)
                 with col2:
                     st.markdown(f'<div class="metric-container"><h5>Fields</h5><h3>{stats["fields"]}</h3></div>',
-                                unsafe_allow_html=True)
+                                 unsafe_allow_html=True)
                 with col3:
                     parsed = parse_java_class(java_code)
                     st.markdown(
@@ -728,107 +730,58 @@ public class BpmCategoryDO extends BaseDO {
             st.error(f"Error converting Java to SQL: {str(e)}")
 
 with tab3:
-    st.subheader("📂 Batch SQL & Java DO Files")
-    st.markdown("You can upload a `.zip` file or select multiple `.sql` or `.java` files.")
-
-    files = st.file_uploader("Select .sql/.java/.txt files", type=["sql", "txt", "java"], accept_multiple_files=True)
+    st.subheader("📂 Batch SQL Files")
+    files = st.file_uploader("Select .sql/.txt files", type=["sql", "txt"], accept_multiple_files=True)
 
     # 新增可配置的文件前缀
     download_prefix = st.text_input("Download file prefix", value="aligned_")
 
     if files:
         st.success(f"Selected {len(files)} file(s)")
+        if st.button("🚀 Start Batch Processing", type="primary"):
 
-        # 区分文件类型
-        sql_files = [f for f in files if f.name.endswith(('.sql', '.txt'))]
-        java_files = [f for f in files if f.name.endswith('.java')]
-
-        # 批量 SQL 对齐
-        if sql_files and st.button("🚀 Start Batch SQL Alignment", type="primary"):
+            # 初始化进度条和状态信息
             progress_bar = st.progress(0)
             status_text = st.empty()
-            summary_report = "--- Batch SQL Alignment Summary ---\n"
+
+            summary_report = "--- Batch Processing Summary ---\n"
             processed_count = 0
+
             zip_buf = io.BytesIO()
             with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                for i, f in enumerate(sql_files):
-                    status_text.info(f"Processing SQL file: {f.name}...")
+                for i, f in enumerate(files):
+                    status_text.info(f"Processing file: {f.name}...")
                     try:
                         raw = f.read().decode(errors="ignore")
                         aligned = align_create_table(raw, wrap_comment_width, case_sensitive)
+
                         file_stats = get_stats(raw)
                         aligned_filename = f"{download_prefix}{f.name}"
                         zf.writestr(aligned_filename, aligned)
+
                         summary_report += (
                             f"\nFile: {f.name}\n"
                             f"  - Original Lines: {file_stats['total']}\n"
                             f"  - Aligned File Name: {aligned_filename}\n"
                         )
                         processed_count += 1
+
                     except Exception as e:
                         summary_report += f"\nFile: {f.name}\n  - Error processing file: {e}\n"
-                    progress_bar.progress((i + 1) / len(sql_files))
+
+                    progress_bar.progress((i + 1) / len(files))
+
             progress_bar.empty()
-            status_text.success("✅ Batch SQL alignment complete!")
+            status_text.success("✅ Batch processing complete!")
+
             st.markdown("---")
             st.subheader("Batch Processing Results")
-            st.info(f"Successfully processed {processed_count} out of {len(sql_files)} SQL files.")
-            st.download_button("📦 Download SQL ZIP", zip_buf.getvalue(), f"{download_prefix}sql_files.zip",
+            st.info(f"Successfully processed {processed_count} out of {len(files)} files.")
+
+            # 下载按钮
+            st.download_button("📦 Download ZIP", zip_buf.getvalue(), f"{download_prefix}sql_files.zip",
                                "application/zip")
             st.download_button("📝 Download Summary Report", summary_report, "batch_summary_report.txt", "text/plain")
-
-        # 批量 Java DO 转换
-        if java_files and st.button("☕ Start Batch Java DO Conversion", type="primary"):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            summary_report = "--- Batch Java DO Conversion Summary ---\n"
-            processed_count = 0
-            zip_buf = io.BytesIO()
-            with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                for i, f in enumerate(java_files):
-                    status_text.info(f"Processing Java DO file: {f.name}...")
-                    try:
-                        java_code = f.read().decode('utf-8', errors='ignore')
-                        generated_sql = java_do_to_sql(
-                            java_code,
-                            schema_name,
-                            add_drop_table,
-                            add_base_do_fields,
-                            add_sequence,
-                            use_camel_to_snake,
-                            db_type
-                        )
-                        if generated_sql.startswith("-- Error"):
-                            raise ValueError(generated_sql)
-
-                        aligned_sql = align_create_table(generated_sql, wrap_comment_width, case_sensitive)
-
-                        parsed_info = parse_java_class(java_code)
-                        class_name = parsed_info['class_name']
-                        table_name = parsed_info['table_name'] if parsed_info['table_name'] else camel_to_snake(
-                            class_name)
-                        sql_filename = f"{table_name}.sql"
-
-                        zf.writestr(sql_filename, aligned_sql)
-
-                        summary_report += (
-                            f"\nFile: {f.name}\n"
-                            f"  - Class Name: {class_name}\n"
-                            f"  - Generated SQL File: {sql_filename}\n"
-                        )
-                        processed_count += 1
-                    except Exception as e:
-                        summary_report += f"\nFile: {f.name}\n  - Error processing file: {e}\n"
-                    progress_bar.progress((i + 1) / len(java_files))
-
-            progress_bar.empty()
-            status_text.success("✅ Batch Java DO conversion complete!")
-            st.markdown("---")
-            st.subheader("Batch Processing Results")
-            st.info(f"Successfully converted {processed_count} out of {len(java_files)} Java DO files.")
-            st.download_button("📦 Download SQL ZIP", zip_buf.getvalue(), f"{download_prefix}java_to_sql_files.zip",
-                               "application/zip")
-            st.download_button("📝 Download Summary Report", summary_report, "batch_java_do_report.txt", "text/plain")
 
 st.markdown("---")
 st.markdown(
